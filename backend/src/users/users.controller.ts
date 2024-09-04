@@ -50,53 +50,27 @@ export class UsersController {
     description: 'Return all users',
     type: [UserEntity],
   })
-  @ApiQuery({
-    name: 'skip',
-    required: false,
-    type: Number,
-    description: 'Number of records to skip',
-  })
-  @ApiQuery({
-    name: 'take',
-    required: false,
-    type: Number,
-    description: 'Number of records to take',
-  })
-  @ApiQuery({
-    name: 'filter',
-    required: false,
-    type: String,
-    description: 'Filter conditions in JSON format',
-  })
-  @ApiQuery({
-    name: 'sort',
-    required: false,
-    type: String,
-    description: 'Sort conditions in JSON format',
-  })
-  @ApiQuery({
-    name: 'requireTotalCount',
-    required: false,
-    type: Boolean,
-    description: 'Whether to return total count',
-  })
+  @ApiQuery({ name: 'skip', required: false, type: Number })
+  @ApiQuery({ name: 'take', required: false, type: Number })
+  @ApiQuery({ name: 'filter', required: false, type: String })
+  @ApiQuery({ name: 'sort', required: false, type: String })
+  @ApiQuery({ name: 'requireTotalCount', required: false, type: Boolean })
   async getAllUsers(
-    @Query('skip') skip: number = 0,
-    @Query('take') take: number = 20,
-    @Query('filter') filter: string = '[]',
-    @Query('sort') sort: string = '[]',
-    @Query('requireTotalCount') requireTotalCount: string = 'false',
+    @Query('skip') skip: number,
+    @Query('take') take: number,
+    @Query('filter') filter: string,
+    @Query('sort') sort: string,
+    @Query('requireTotalCount') requireTotalCount: boolean,
   ) {
-    const parsedFilter = JSON.parse(filter);
-    const parsedSort = JSON.parse(sort);
-    console.log(parsedFilter);
-    console.log(parsedSort);
+    const parsedFilter = filter ? JSON.parse(filter) : [];
+    const parsedSort = sort ? JSON.parse(sort) : [];
+
     return this.usersService.getAllUsers({
-      skip: +skip,
-      take: +take,
+      skip: +skip || 0,
+      take: +take || 20,
       filter: parsedFilter,
       sort: parsedSort,
-      requireTotalCount: requireTotalCount === 'true',
+      requireTotalCount: requireTotalCount,
     });
   }
 

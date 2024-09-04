@@ -16,23 +16,45 @@ import DataGrid, {
   HeaderFilter,
   Pager,
 } from "devextreme-react/data-grid";
-import { createStore } from "devextreme-aspnet-data-nojquery";
+// import { createStore } from "devextreme-aspnet-data-nojquery";
 import "whatwg-fetch";
+import CustomStore from "devextreme/data/custom_store";
 
 const URL = "http://localhost:5000";
 const emailValidationUrl = "http://localhost:5000/users/check-email";
 
-// Create a data store for the users with sorting and filtering
-const usersStore = createStore({
+function isNotEmpty(value: string | undefined | null) {
+  return value !== undefined && value !== null && value !== "";
+}
+
+const usersStore = new CustomStore({
   key: "id",
-  loadUrl: `${URL}/users`,
-  loadParams: {
-    skip: 0,
-    take: 20,
-    sort: '[{"selector":"firstName","desc":false}]',
-  },
-  onBeforeSend: (method, ajaxOptions) => {
-    ajaxOptions.xhrFields = { withCredentials: true };
+  async load(loadOptions) {
+    const paramNames = ["skip", "take", "requireTotalCount", "sort", "filter"];
+
+    const queryString = paramNames
+      .filter((paramName) => isNotEmpty(loadOptions[paramName]))
+      .map(
+        (paramName) => `${paramName}=${JSON.stringify(loadOptions[paramName])}`
+      )
+      .join("&");
+
+    try {
+      const response = await fetch(
+        `http://localhost:5000/users?${queryString}`
+      );
+
+      const result = await response.json();
+
+      return {
+        data: result.data,
+        totalCount: result.totalCount,
+        summary: result.summary,
+        groupCount: result.groupCount,
+      };
+    } catch (err) {
+      throw new Error("Data Loading Error");
+    }
   },
 });
 
@@ -96,30 +118,7 @@ const allowedPageSizes: (DataGridTypes.PagerPageSize | number)[] = [
 const App = () => {
   const [displayMode, setDisplayMode] =
     useState<DataGridTypes.PagerDisplayMode>("full");
-  const [showPageSizeSelector, setShowPageSizeSelector] = useState(true);
-  const [showInfo, setShowInfo] = useState(true);
-  const [showNavButtons, setShowNavButtons] = useState(true);
 
-  const displayModeChange = useCallback((value) => {
-    setDisplayMode(value);
-  }, []);
-
-  const showPageSizeSelectorChange = useCallback((value) => {
-    setShowPageSizeSelector(value);
-  }, []);
-
-  const showInfoChange = useCallback((value) => {
-    setShowInfo(value);
-  }, []);
-
-  const showNavButtonsChange = useCallback((value) => {
-    setShowNavButtons(value);
-  }, []);
-
-  const isCompactMode = useCallback(
-    () => displayMode === "compact",
-    [displayMode]
-  );
   return (
     <div className="container mx-auto p-6">
       <div className="p-4 flex">
@@ -134,13 +133,10 @@ const App = () => {
           repaintChangesOnly={true}
           onSaving={onSaving}
         >
-          <Paging defaultPageSize={20} />
           <Sorting mode="multiple" />
-          <Scrolling mode="virtual" />
           <FilterRow visible={true} />
           <HeaderFilter visible={true} />
           <Scrolling rowRenderingMode="virtual"></Scrolling>
-          <Paging defaultPageSize={10} />
 
           <Editing
             mode="batch"
@@ -172,9 +168,9 @@ const App = () => {
             visible={true}
             allowedPageSizes={allowedPageSizes}
             displayMode={displayMode}
-            showPageSizeSelector={showPageSizeSelector}
-            showInfo={showInfo}
-            showNavigationButtons={showNavButtons}
+            showPageSizeSelector={true}
+            showInfo={true}
+            showNavigationButtons={true}
           />
         </DataGrid>
       </div>

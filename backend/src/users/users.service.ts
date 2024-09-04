@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -21,83 +22,68 @@ export class UsersService {
       throw new BadRequestException('Failed to create user');
     }
   }
+  private buildWhereClause(filter: any) {
+    if (!filter || filter.length === 0) return {};
 
-  async getAllUsers(params: {
-    skip?: number;
-    take?: number;
-    filter?: any;
-    sort?: any;
-    requireTotalCount?: boolean;
+    if (Array.isArray(filter[0])) {
+      // Handle nested array filter
+      return filter.reduce((acc, [field, operator, value]) => {
+        acc[field] = { [operator]: value };
+        return acc;
+      }, {});
+    } else {
+      // Handle simple array filter
+      const [field, operator, value] = filter;
+      return {
+        [field]: {
+          [operator]: value,
+        },
+      };
+    }
+  }
+
+  private buildOrderByClause(sort: any) {
+    return sort.map((s: any) => ({
+      [s.selector]: s.desc ? 'desc' : 'asc',
+    }));
+  }
+
+  async getAllUsers(query: {
+    skip: number;
+    take: number;
+    filter?: any; // Marked as optional
+    sort?: any; // Marked as optional
+    requireTotalCount: boolean;
   }) {
-    const {
-      skip = 0,
-      take = 20,
-      filter,
-      sort,
-      requireTotalCount = false,
-    } = params;
+    const { skip, take, filter, sort, requireTotalCount } = query;
 
-    const where = this.buildWhereClause(filter);
-    const orderBy = this.buildOrderByClause(sort);
+    // Handle empty filter and sort
+    const whereClause = filter ? this.buildWhereClause(filter) : {};
+    const orderByClause = sort ? this.buildOrderByClause(sort) : [];
 
-    const [users, totalCount] = await Promise.all([
-      this.prisma.user.findMany({
+    try {
+      const users = await this.prisma.user.findMany({
         skip,
         take,
-        where,
-        orderBy,
-      }),
-      requireTotalCount
-        ? this.prisma.user.count({ where })
-        : Promise.resolve(0),
-    ]);
+        where: whereClause,
+        orderBy: orderByClause,
+      });
 
-    return {
-      data: users,
-      totalCount: requireTotalCount ? totalCount : undefined,
-      groupCount: -1,
-      summary: null,
-    };
+      const totalCount = requireTotalCount
+        ? await this.prisma.user.count({ where: whereClause })
+        : null;
+
+      return {
+        data: users,
+        totalCount,
+        summary: null, // if you have summary logic, implement it here
+        groupCount: null, // if you have group count logic, implement it here
+      };
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      throw new InternalServerErrorException('Failed to fetch users');
+    }
   }
-  private buildOrderByClause(sort: any) {
-    if (!Array.isArray(sort)) return [];
-
-    return sort.map((s: any) => {
-      const { selector, desc } = s;
-      return { [selector]: desc ? 'desc' : 'asc' };
-    });
-  }
-
-  private buildWhereClause(filter: any) {
-    if (!filter || !Array.isArray(filter)) return {};
-
-    const whereClause: any = {};
-
-    filter.forEach((f: any) => {
-      const [field, operator, value] = f;
-
-      switch (operator) {
-        case 'contains':
-          whereClause[field] = { contains: value, mode: 'insensitive' }; // Case-insensitive search
-          break;
-        case 'equals':
-          whereClause[field] = { equals: value };
-          break;
-        case 'startsWith':
-          whereClause[field] = { startsWith: value, mode: 'insensitive' };
-          break;
-        case 'endsWith':
-          whereClause[field] = { endsWith: value, mode: 'insensitive' };
-          break;
-
-        default:
-          break;
-      }
-    });
-
-    return whereClause;
-  }
-
   async findOne(id: number): Promise<User> {
     const user = await this.prisma.user.findUnique({
       where: { id },
